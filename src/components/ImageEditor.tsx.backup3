@@ -1,0 +1,339 @@
+'use client';
+
+import React, { useState, useRef, ChangeEvent } from 'react';
+import { Upload, Download, Sparkles, Image as ImageIcon, Loader2, AlertCircle } from 'lucide-react';
+
+interface Variation {
+  data: string;
+  mimeType: string;
+  index: number;
+}
+
+const ImageEditor = () => {
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [prompt, setPrompt] = useState('');
+  const [variations, setVariations] = useState<Variation[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const samplePrompts = [
+    '背景をぼかして被写体を強調',
+    '明るさを上げて暖かい雰囲気に',
+    'プロフェッショナルな白黒写真に変換',
+    '夕暮れの雰囲気を追加',
+    '背景を削除して透明に',
+    'ヴィンテージスタイルに加工'
+  ];
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleFileInput = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      handleFile(e.target.files[0]);
+    }
+  };
+
+  const handleFile = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      setError('画像ファイルを選択してください');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setSelectedImage(reader.result as string);
+      setError(null);
+      setVariations([]);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const generateVariations = async () => {
+    if (!selectedImage || !prompt) {
+      setError('画像と編集指示を入力してください');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    setVariations([]);
+
+    try {
+      const base64Image = selectedImage.split(',')[1];
+      
+      const response = await fetch('/api/edit-image', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          image: base64Image,
+          prompt: prompt
+        })
+      });
+
+      const data = await response.json();
+      console.log('Frontend Response:', data);
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          throw new Error('無料枠上限に達しました(50回/日)。明日再試行するか、$10購入で1000回/日に拡張できます。');
+        } else if (response.status === 401) {
+          throw new Error('APIキー設定エラー。.env.localファイルを確認してサーバーを再起動してください。');
+        }
+        throw new Error(data.error || `エラー: ${response.status}`);
+      }
+
+      // OpenRouterレスポンス処理
+      const processedVariations: Variation[] = [];
+      
+      if (data.response?.choices?.[0]?.message?.images) {
+        data.response.choices[0].message.images.forEach((img: any, index: number) => {
+          if (img.image_url?.url) {
+            const base64Data = img.image_url.url.replace(/^data:image\/[^;]+;base64,/, '');
+            processedVariations.push({
+              data: base64Data,
+              mimeType: 'image/png',
+              index: index + 1
+            });
+          }
+        });
+      } else if (data.response?.candidates?.[0]?.content?.parts) {
+        data.response.candidates[0].content.parts.forEach((part: any, index: number) => {
+          if (part.inlineData?.data) {
+            processedVariations.push({
+              data: part.inlineData.data,
+              mimeType: part.inlineData.mimeType || 'image/png',
+              index: index + 1
+            });
+          }
+        });
+      }
+
+      if (processedVariations.length === 0) {
+        console.log('Debug Response Structure:', JSON.stringify(data.response, null, 2));
+        throw new Error('画像生成に失敗しました。レスポンス構造を確認してください。');
+      }
+
+      setVariations(processedVariations);
+      
+    } catch (err) {
+      console.error('Generation Error:', err);
+      setError(err instanceof Error ? err.message : '予期しないエラー');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const downloadImage = (variation: Variation) => {
+    console.log('Downloading variation:', variation.index, 'Data length:', variation.data.length);
+    
+    const link = document.createElement('a');
+    link.href = `data:${variation.mimeType};base64,${variation.data}`;
+    link.download = `edited-image-${variation.index}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    console.log('Download completed');
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 p-4">
+      <div className="max-w-7xl mx-auto">
+        <header className="text-center py-8">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">
+            画像編集ツール
+          </h1>
+        </header>
+
+        <div className="grid lg:grid-cols-2 gap-6">
+          <div className="space-y-4">
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                <Upload className="w-5 h-5 text-purple-600" />
+                画像をアップロード
+              </h2>
+              
+              <div
+                className={`border-2 border-dashed rounded-lg p-8 transition-colors ${
+                  dragActive ? 'border-purple-500 bg-purple-50' : 'border-gray-300'
+                } hover:border-purple-400 hover:bg-gray-50`}
+                onDragEnter={handleDrag}
+                onDragLeave={handleDrag}
+                onDragOver={handleDrag}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileInput}
+                  className="hidden"
+                />
+                
+                {selectedImage ? (
+                  <div className="relative h-full">
+                    <img 
+                      src={selectedImage} 
+                      alt="Selected" 
+                      className="w-full h-full rounded-lg object-cover bg-white"
+                      style={{ backgroundColor: 'white' }}
+                      onError={(e) => {
+                        console.error('Image display error:', e);
+                        setError('画像の表示に失敗しました');
+                      }}
+                      onLoad={() => console.log('Image loaded successfully')}
+                    />
+                    <div className="absolute inset-0 bg-black/0 hover:bg-black/10 transition-colors rounded-lg cursor-pointer flex items-center justify-center">
+                      <p className="text-white opacity-0 hover:opacity-100 transition-opacity">
+                        クリックして変更
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center">
+                    <ImageIcon className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                    <p className="text-gray-600 mb-2">
+                      画像をドラッグ&ドロップ
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      またはクリックして選択
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-purple-600" />
+                編集指示
+              </h2>
+              
+              <textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="どのように画像を編集しますか？"
+                className="w-full p-3 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
+                rows={4}
+              />
+
+              <div className="mt-4">
+                <p className="text-sm text-gray-600 mb-2">サンプル指示:</p>
+                <div className="flex flex-wrap gap-2">
+                  {samplePrompts.map((sample, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setPrompt(sample)}
+                      className="px-3 py-1 text-sm bg-gray-100 hover:bg-purple-100 text-gray-700 hover:text-purple-700 rounded-full transition-colors"
+                    >
+                      {sample}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                onClick={generateVariations}
+                disabled={!selectedImage || !prompt || isLoading}
+                className={`w-full mt-4 py-3 px-4 rounded-lg font-semibold transition-all transform hover:scale-105 ${
+                  !selectedImage || !prompt || isLoading
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700'
+                }`}
+              >
+                {isLoading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    生成中...
+                  </span>
+                ) : (
+                  '3つのバリエーションを生成'
+                )}
+              </button>
+            </div>
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
+                <div>
+                  <p className="text-red-800 font-medium">エラー</p>
+                  <p className="text-red-600 text-sm mt-1">{error}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-4">
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <h2 className="text-xl font-semibold mb-4">生成結果</h2>
+              
+              {variations.length > 0 ? (
+                <div className="grid gap-4">
+                  {variations.map((variation) => (
+                    <div key={variation.index} className="relative group">
+                      <img
+                        src={`data:${variation.mimeType};base64,${variation.data}`}
+                        alt={`Variation ${variation.index}`}
+                        className="w-full h-auto rounded-lg bg-white border"
+                        style={{ 
+                          backgroundColor: 'white',
+                          minHeight: '200px'
+                        }}
+                        onError={(e) => {
+                          console.error('Variation image error:', variation.index, e);
+                        }}
+                        onLoad={() => console.log(`Variation ${variation.index} loaded`)}
+                      />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors rounded-lg" />
+                      <button
+                        onClick={() => downloadImage(variation)}
+                        className="absolute top-4 right-4 p-2 bg-white rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity transform hover:scale-110"
+                      >
+                        <Download className="w-5 h-5 text-gray-700" />
+                      </button>
+                      <span className="absolute top-4 left-4 px-3 py-1 bg-white rounded-full shadow-lg text-sm font-semibold text-gray-700">
+                        バリエーション {variation.index}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <ImageIcon className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                  <p className="text-gray-500">
+                    画像をアップロードして編集指示を入力してください
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ImageEditor;
