@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>アラート内容 - Meta広告ダッシュボード</title>
+    <link rel="stylesheet" href="/style.css">
+    <style>
+        .app-container {
+            display: flex;
+            min-height: 100vh;
+            background: #f5f6fa;
+        }
+
+        .main-content {
+            flex: 1;
+            padding: 20px;
+            background-color: #f9fafb;
+        }
+
+        .alerts-page {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 16px 20px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        /* 目標編集ボタン */
+        .edit-targets-btn {
+            padding: 8px 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .edit-targets-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        /* 目標編集モーダル */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 32px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .modal-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .modal-close {
+            font-size: 24px;
+            color: #6b7280;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+        }
+
+        .modal-close:hover {
+            color: #374151;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 8px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-unit {
+            font-size: 12px;
+            color: #6b7280;
+            margin-left: 4px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            margin-top: 24px;
+        }
+
+        .btn-save {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-save:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-cancel {
+            padding: 10px 20px;
+            background: #f3f4f6;
+            color: #374151;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-cancel:hover {
+            background: #e5e7eb;
+        }
+
+        .page-header h2 {
+            margin: 0;
+            color: #374151;
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .header-info {
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        /* アラートカード */
+        .alert-card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+
+        .alert-header {
+            padding: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .alert-header.warning {
+            background-color: #fef3c7;
+            border-left: 4px solid #f59e0b;
+        }
+
+        .alert-header.critical {
+            background-color: #fee2e2;
+            border-left: 4px solid #ef4444;
+        }
+
+        .alert-metric {
+            font-size: 18px;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .alert-timestamp {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .alert-body {
+            padding: 16px;
+        }
+
+        .alert-details {
+            display: flex;
+            gap: 40px;
+            align-items: center;
+        }
+
+        .alert-item {
+            flex: 1;
+        }
+
+        .alert-label {
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 4px;
+        }
+
+        .alert-value {
+            font-size: 20px;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .alert-value.target {
+            color: #059669;
+        }
+
+        .alert-value.current {
+            color: #ef4444;
+        }
+
+        .alert-arrow {
+            font-size: 24px;
+            color: #6b7280;
+        }
+
+        .alert-difference {
+            text-align: center;
+        }
+
+        .diff-value {
+            font-size: 16px;
+            font-weight: 600;
+            color: #ef4444;
+        }
+
+        .no-alerts {
+            text-align: center;
+            padding: 60px 20px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .no-alerts-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .no-alerts h3 {
+            color: #059669;
+            margin: 0;
+            font-size: 18px;
+        }
+
+        /* レスポンシブ対応 */
+        @media (max-width: 768px) {
+            .alert-details {
+                flex-direction: column;
+                gap: 16px;
+            }
+            
+            .alert-arrow {
+                transform: rotate(90deg);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- サイドバー -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h3>Meta広告レポート</h3>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="/dashboard" class="nav-item">ダッシュボード</a>
+                <a href="/alerts" class="nav-item active">アラート内容</a>
+                <a href="/alert-history" class="nav-item">アラート履歴</a>
+                <a href="/improvement-tasks" class="nav-item">確認事項</a>
+                <a href="/improvement-strategies" class="nav-item">改善施策</a>
+                <a href="/chatwork-test" class="nav-item">チャットワークテスト</a>
+            </nav>
+        </div>
+
+        <!-- メインコンテンツ -->
+        <div class="main-content">
+            <div class="alerts-page">
+                <div class="page-header">
+                    <h2>⚠️ アラート内容</h2>
+                    <div style="display: flex; align-items: center; gap: 20px;">
+                        <div class="header-info">
+                            アクティブ: <%= alerts ? alerts.filter(a => a.status === 'active').length : 0 %>件
+                            | 最終更新: <%= new Date().toLocaleString('ja-JP') %>
+                        </div>
+                        <button class="edit-targets-btn" onclick="openTargetModal()">
+                            📝 目標を編集
+                        </button>
+                    </div>
+                </div>
+
+                <div id="alerts-container">
+                    <% if (alerts && alerts.length > 0) { %>
+                        <% alerts.forEach(alert => { %>
+                            <div class="alert-card">
+                                <div class="alert-header <%= alert.severity || 'warning' %>">
+                                    <div class="alert-metric">
+                                        <%= alert.metric %>
+                                    </div>
+                                    <div class="alert-timestamp">
+                                        <%= new Date(alert.timestamp).toLocaleString('ja-JP') %>
+                                    </div>
+                                </div>
+                                
+                                <div class="alert-body">
+                                    <div class="alert-details">
+                                        <div class="alert-item">
+                                            <div class="alert-label">目標値</div>
+                                            <div class="alert-value target">
+                                                <% if (alert.targetValue !== undefined) { %>
+                                                    <%= formatMetricValue(alert.metric, alert.targetValue) %>
+                                                <% } else { %>
+                                                    -
+                                                <% } %>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="alert-arrow">→</div>
+                                        
+                                        <div class="alert-item">
+                                            <div class="alert-label">現在値</div>
+                                            <div class="alert-value current">
+                                                <% if (alert.currentValue !== undefined) { %>
+                                                    <%= formatMetricValue(alert.metric, alert.currentValue) %>
+                                                <% } else { %>
+                                                    -
+                                                <% } %>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="alert-item alert-difference">
+                                            <div class="alert-label">乖離</div>
+                                            <div class="diff-value">
+                                                <% if (alert.targetValue !== undefined && alert.currentValue !== undefined) { %>
+                                                    <%= calculateDifference(alert.metric, alert.targetValue, alert.currentValue) %>
+                                                <% } else { %>
+                                                    -
+                                                <% } %>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        <% }) %>
+                    <% } else { %>
+                        <div class="no-alerts">
+                            <div class="no-alerts-icon">✅</div>
+                            <h3>現在アクティブなアラートはありません</h3>
+                        </div>
+                    <% } %>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 目標編集モーダル -->
+    <div class="modal-overlay" id="targetModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">🎯 目標数値の編集</h3>
+                <button class="modal-close" onclick="closeTargetModal()">×</button>
+            </div>
+            
+            <form id="targetForm">
+                <div class="form-group">
+                    <label class="form-label">予算消化率<span class="form-unit">(%)</span></label>
+                    <input type="number" class="form-input" id="target_budget_rate" name="target_budget_rate" value="80" min="0" max="100" step="1">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">日予算<span class="form-unit">(円)</span></label>
+                    <input type="number" class="form-input" id="target_daily_budget" name="target_daily_budget" value="2800" min="0" step="100">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">CTR<span class="form-unit">(%)</span></label>
+                    <input type="number" class="form-input" id="target_ctr" name="target_ctr" value="1.0" min="0" step="0.1">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">CPM<span class="form-unit">(円)</span></label>
+                    <input type="number" class="form-input" id="target_cpm" name="target_cpm" value="1500" min="0" step="100">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">CPA<span class="form-unit">(円)</span></label>
+                    <input type="number" class="form-input" id="target_cpa" name="target_cpa" value="7000" min="0" step="100">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">CV<span class="form-unit">(件/日)</span></label>
+                    <input type="number" class="form-input" id="target_cv" name="target_cv" value="1" min="0" step="1">
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" class="btn-cancel" onclick="closeTargetModal()">キャンセル</button>
+                    <button type="submit" class="btn-save">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // ページ読み込み時に現在の目標値を取得
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const response = await fetch('/api/user-settings');
+                if (response.ok) {
+                    const settings = await response.json();
+                    // フォームに現在の値を設定
+                    if (settings.target_budget_rate) document.getElementById('target_budget_rate').value = settings.target_budget_rate;
+                    if (settings.target_daily_budget) document.getElementById('target_daily_budget').value = settings.target_daily_budget;
+                    if (settings.target_ctr) document.getElementById('target_ctr').value = settings.target_ctr;
+                    if (settings.target_cpm) document.getElementById('target_cpm').value = settings.target_cpm;
+                    if (settings.target_cpa) document.getElementById('target_cpa').value = settings.target_cpa;
+                    if (settings.target_cv) document.getElementById('target_cv').value = settings.target_cv;
+                }
+            } catch (error) {
+                console.error('設定の取得エラー:', error);
+            }
+        });
+
+        function openTargetModal() {
+            document.getElementById('targetModal').classList.add('active');
+        }
+
+        function closeTargetModal() {
+            document.getElementById('targetModal').classList.remove('active');
+        }
+
+        // フォーム送信処理
+        document.getElementById('targetForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = {
+                target_budget_rate: parseFloat(document.getElementById('target_budget_rate').value),
+                target_daily_budget: parseFloat(document.getElementById('target_daily_budget').value),
+                target_ctr: parseFloat(document.getElementById('target_ctr').value),
+                target_cpm: parseFloat(document.getElementById('target_cpm').value),
+                target_cpa: parseFloat(document.getElementById('target_cpa').value),
+                target_cv: parseInt(document.getElementById('target_cv').value)
+            };
+
+            try {
+                const response = await fetch('/api/update-targets', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                if (response.ok) {
+                    alert('目標値を更新しました');
+                    closeTargetModal();
+                    // ページをリロードして新しいアラートを表示
+                    window.location.reload();
+                } else {
+                    const error = await response.json();
+                    alert('更新に失敗しました: ' + (error.message || 'エラーが発生しました'));
+                }
+            } catch (error) {
+                console.error('更新エラー:', error);
+                alert('更新に失敗しました');
+            }
+        });
+
+        // モーダル外クリックで閉じる
+        document.getElementById('targetModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('targetModal')) {
+                closeTargetModal();
+            }
+        });
+    </script>
+
+    <%
+    // ヘルパー関数をEJSテンプレート内で定義
+    function formatMetricValue(metric, value) {
+        if (value === null || value === undefined) return '-';
+        
+        switch(metric) {
+            case 'CTR':
+            case 'CVR':
+                // CTR、CVRは小数点第1位まで表示
+                return (Math.round(value * 10) / 10) + '%';
+            case '予算消化率':
+                // 予算消化率は整数表示
+                return Math.round(value) + '%';
+            case 'ROAS':
+                return (Math.round(value * 10) / 10) + '%';
+            case 'CV':
+                return Math.round(value) + '件';
+            case 'CPA':
+            case 'CPM':
+            case 'CPC':
+                return Math.round(value).toLocaleString() + '円';
+            default:
+                return value.toString();
+        }
+    }
+
+    function calculateDifference(metric, target, current) {
+        if (target === null || current === null || target === undefined || current === undefined) return '-';
+        
+        const diff = current - target;
+        const percentage = Math.abs((diff / target) * 100).toFixed(1);
+        
+        // 低い方が良い指標（CPA、CPM、CPC）
+        if (['CPA', 'CPM', 'CPC'].includes(metric)) {
+            if (diff > 0) {
+                return '+' + percentage + '%';
+            } else {
+                return '-' + percentage + '%';
+            }
+        }
+        // 高い方が良い指標
+        else {
+            if (diff < 0) {
+                return '-' + percentage + '%';
+            } else {
+                return '+' + percentage + '%';
+            }
+        }
+    }
+    %>
+</body>
+</html>
